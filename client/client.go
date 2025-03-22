@@ -4,88 +4,109 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"syscall/js"
+
+	"wasmapp/types"
 )
 
-var counter int
+func createContact(this js.Value, p []js.Value) any {
+	email := js.Global().Get("document").Call("getElementById", "email").Get("value").String()
+	name := js.Global().Get("document").Call("getElementById", "name").Get("value").String()
 
-func inc(this js.Value, p []js.Value) any {
-	counter++
-	countEle := js.Global().Get("document").Call("getElementById", "count")
-	countEle.Set("innerHTML", fmt.Sprintf("%d", counter))
-	js.Global().Call("send", counter)
-	return nil
-}
+	reqPL := types.CreateContact{
+		Name:  name,
+		Email: email,
+	}
 
-func dec(this js.Value, p []js.Value) any {
-	counter--
-	countEle := js.Global().Get("document").Call("getElementById", "count")
-	countEle.Set("innerHTML", fmt.Sprintf("%d", counter))
-	js.Global().Call("send", counter)
-	return nil
-}
+	pl, err := json.Marshal(reqPL)
+	if err != nil {
+		panic(err)
+	}
 
-func onMessage(this js.Value, args []js.Value) any {
-	msg := args[0].Get("data").String()
-	fmt.Println("Received from server:", msg)
+	go func() {
+		defer func() {
+			js.Global().Get("document").Call("getElementById", "name").Set("value", "")
+			js.Global().Get("document").Call("getElementById", "email").Set("value", "")
+
+			if r := recover(); r != nil {
+				js.Global().Get("console").Call("error", "Recovered from panic:", r)
+			}
+		}()
+
+		res, err := http.Post(
+			"http://localhost:8080/contact",
+			"application/json",
+			bytes.NewBuffer(pl),
+		)
+		if err != nil {
+			panic(err)
+		}
+		defer res.Body.Close()
+
+		var c types.CreateContactResponse
+		if err := json.NewDecoder(res.Body).Decode(&c); err != nil {
+			panic(err)
+		}
+
+		list := js.Global().
+			Get("document").
+			Call("getElementById", "contact-list")
+
+		newDiv := js.Global().Get("document").Call("createElement", "div")
+		newDiv.Set("innerHTML", fmt.Sprintf("<div>%s %s %s</div>", c.ID, c.Name, c.Email))
+		list.Call("appendChild", newDiv)
+	}()
+
 	return nil
 }
 
 func navigateToIndex(this js.Value, args []js.Value) any {
-	counter = 0
-	var counterHtml strings.Builder
-	if err := Counter().Render(context.TODO(), &counterHtml); err != nil {
+	var contactListHTML strings.Builder
+	if err := ContactBook().Render(context.TODO(), &contactListHTML); err != nil {
 		panic(err)
 	}
 
 	js.Global().
 		Get("document").
 		Call("getElementById", "root").
-		Set("innerHTML", counterHtml.String())
-	return nil
-}
+		Set("innerHTML", contactListHTML.String())
 
-func navigateToAbout(this js.Value, args []js.Value) any {
-	var aboutHTML strings.Builder
-	if err := About().Render(context.TODO(), &aboutHTML); err != nil {
-		panic(err)
-	}
+	go func() {
+		resp, err := http.Get("http://localhost:8080/contacts")
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
 
-	js.Global().
-		Get("document").
-		Call("getElementById", "root").
-		Set("innerHTML", aboutHTML.String())
+		var respPL types.GetContactsReponse
+		if err := json.NewDecoder(resp.Body).Decode(&respPL); err != nil {
+			panic(err)
+		}
+
+		list := js.Global().
+			Get("document").
+			Call("getElementById", "contact-list")
+
+		for _, c := range respPL.Data {
+			newDiv := js.Global().Get("document").Call("createElement", "div")
+			newDiv.Set("innerHTML", fmt.Sprintf("<div>%s %s %s</div>", c.ID, c.Name, c.Email))
+			list.Call("appendChild", newDiv)
+		}
+	}()
 
 	return nil
 }
 
 func main() {
-	js.Global().Set("inc", js.FuncOf(inc))
-	js.Global().Set("dec", js.FuncOf(dec))
 	js.Global().Set("navigateToIndex", js.FuncOf(navigateToIndex))
-	js.Global().Set("navigateToAbout", js.FuncOf(navigateToAbout))
-
-	ws := js.Global().
-		Get("WebSocket").
-		New("ws://localhost:8080/ws")
-
-	ws.Set("onmessage", js.FuncOf(onMessage))
-
-	js.Global().Set("send", js.FuncOf(func(this js.Value, args []js.Value) any {
-		num := args[0].Int()
-		ws.Call("send", num)
-		return nil
-	}))
-
+	js.Global().Set("createContact", js.FuncOf(createContact))
 	navigateToIndex(js.ValueOf(nil), []js.Value{})
-
-	js.Global().
-		Get("document").
-		Call("getElementById", "count").
-		Set("innerHTML", fmt.Sprintf("%d", counter))
 
 	select {}
 }

@@ -1,5 +1,22 @@
 package types
 
-type MyMessage struct {
-	Message string `json:"message"`
+type CreateContact struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type CreateContactResponse struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type Contact struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type GetContactsReponse struct {
+	Data []*Contact `json:"data"`
 }

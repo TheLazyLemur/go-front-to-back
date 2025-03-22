@@ -3,46 +3,26 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/gorilla/websocket"
-
 	"wasmapp"
+	"wasmapp/server/internal"
 	"wasmapp/types"
 )
 
-var (
-	counter  int
-	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true // Allow all connections (modify as needed for security)
-		},
-	}
-)
+var repo = internal.NewContactRepo()
 
 func main() {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/main.wasm", serveWasm)
-	mux.HandleFunc("/", handleIndex)
-	mux.HandleFunc("/wasm_exec.js", serveWasmExec)
-	mux.HandleFunc("/message", handleMessage)
-	mux.HandleFunc("/ws", handleWebSocket)
+	mux.HandleFunc("GET /", handleIndex)
+	mux.HandleFunc("GET /main.wasm", serveWasm)
+	mux.HandleFunc("GET /wasm_exec.js", serveWasmExec)
+	mux.HandleFunc("POST /contact", handleCreateContact)
+	mux.HandleFunc("GET /contacts", handleGetContacts)
 
 	log.Fatal(http.ListenAndServe(":8080", mux))
-}
-
-func handleMessage(w http.ResponseWriter, r *http.Request) {
-	var msg types.MyMessage
-	err := json.NewDecoder(r.Body).Decode(&msg)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	fmt.Println(msg.Message)
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -82,29 +62,55 @@ func serveWasm(w http.ResponseWriter, r *http.Request) {
 	w.Write(wasmapp.Wasm)
 }
 
-func handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func handleCreateContact(w http.ResponseWriter, r *http.Request) {
+	var req types.CreateContact
+
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		log.Println("WebSocket upgrade error:", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer conn.Close()
 
-	log.Println("Client connected")
+	c, err := repo.CreateContact(req.Name, req.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	for {
-		messageType, msg, err := conn.ReadMessage()
-		if err != nil {
-			log.Println("Read error:", err)
-			break
+	resp := types.CreateContactResponse{
+		ID:    c.ID,
+		Name:  c.Name,
+		Email: c.Email,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func handleGetContacts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	contacts := repo.GetContacts()
+
+	cs := make([]*types.Contact, len(contacts))
+	for i, c := range contacts {
+		cs[i] = &types.Contact{
+			ID:    c.ID,
+			Name:  c.Name,
+			Email: c.Email,
 		}
+	}
 
-		log.Printf("Received: %s\n", msg)
+	resp := types.GetContactsReponse{
+		Data: cs,
+	}
 
-		err = conn.WriteMessage(messageType, fmt.Appendf(nil, "Server Echo: %s", msg))
-		if err != nil {
-			log.Println("Write error:", err)
-			break
-		}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }

@@ -8,21 +8,13 @@ templ layout() {
 	</div>
 }
 
-templ Counter() {
+templ ContactBook() {
 	@layout() {
-		<div id="counter" class="grid overflow-hidden grid-cols-3 text-center rounded-lg w-[200px]">
-			<button class="bg-red-500" id="decrement" onclick="window.dec()">-</button>
-			<div class="bg-slate-200" id="count">0</div>
-			<button class="bg-green-500" id="increment" onclick="window.inc()">+</button>
+		<div>
+			<input id="name" type="text" name="name" placeholder="Name" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm focus:border-indigo-500 focus:ring-indigo-500"/>
+			<input id="email" type="email" name="email" placeholder="Email" class="w-full rounded-md border-gray-300 shadow-sm sm:text-sm focus:border-indigo-500 focus:ring-indigo-500"/>
+			<button onclick="createContact()" class="py-2 px-4 w-full text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Create Contact</button>
 		</div>
-	}
-}
-
-templ About() {
-	@layout() {
-		<div class="text-center">
-			<h1 class="text-3xl font-bold">About</h1>
-			<p class="text-lg">This is a simple counter app built with Neovim and Templ.</p>
-		</div>
+		<div id="contact-list" class=""></div>
 	}
 }
