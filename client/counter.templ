@@ -1,0 +1,28 @@
+package main
+
+templ layout() {
+	<div>
+		<a onclick="navigateToIndex()" class="text-blue-500 hover:text-blue-700">Home</a>
+		<a onclick="navigateToAbout()" class="text-blue-500 hover:text-blue-700">About</a>
+		{ children... }
+	</div>
+}
+
+templ Counter() {
+	@layout() {
+		<div id="counter" class="grid overflow-hidden grid-cols-3 text-center rounded-lg w-[200px]">
+			<button class="bg-red-500" id="decrement" onclick="window.dec()">-</button>
+			<div class="bg-slate-200" id="count">0</div>
+			<button class="bg-green-500" id="increment" onclick="window.inc()">+</button>
+		</div>
+	}
+}
+
+templ About() {
+	@layout() {
+		<div class="text-center">
+			<h1 class="text-3xl font-bold">About</h1>
+			<p class="text-lg">This is a simple counter app built with Neovim and Templ.</p>
+		</div>
+	}
+}
